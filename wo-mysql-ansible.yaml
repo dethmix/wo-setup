@@ -1,0 +1,96 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  vars:
+    aws_access_key_id: "XXXXXXXX"
+    aws_secret_access_key: "ZZZZZZZ"
+    wo_name: "ansible"
+    wo_email: "ansible@ansible.com"
+
+  tasks:
+  - name: install pip3
+    apt:
+      name: python3-pip
+      update_cache: yes
+
+  - name: install pexpect
+    pip:
+      name: pexpect
+
+  - name: check that WO file exist, before checking WO status
+    stat:
+      path: /usr/local/bin/wo
+    register: wo_stat
+
+  - name: download wo file
+    get_url:
+      url: http://wops.cc
+      dest: /tmp/wo
+    register: wo_download
+    when: wo_stat.stat.exists == False
+
+  - name: install wo
+    expect:
+      command: /bin/bash /tmp/wo
+      timeout: 600
+      responses:
+        'Enter your name:': "{{ wo_name }}"
+        'Enter your email:': "{{ wo_email }}"
+    register: wo_install
+    when: not wo_download is skipped
+
+  #TODO add autocompletion /etc/bash_completion.d/wo_auto.rc to bash profile
+
+  - name: Check wo stack status
+    command: wo stack status --mysql
+    register: wo_stack_status
+
+  - name: install wo mysql only
+    shell: /usr/local/bin/wo stack install --mysql
+    register: wo_stack_install
+    when: wo_stack_status.stdout.count('not installed') > 1
+
+  - name: Enable and restart mysql
+    service:
+      name: mysql
+      state: restarted
+      enabled: yes
+    when: not wo_stack_install is skipped
+
+  #additional server setup
+  - name: Install awscli, boto3, s3-pit-restore
+    pip:
+      name: awscli, boto3, s3-pit-restore
+
+  - name: create .aws directory
+    file:
+      path: /root/.aws
+      state: directory
+
+  - name: create aws credential file
+    copy: content="[default]\naws_access_key_id = {{aws_access_key_id}}\naws_secret_access_key = {{aws_secret_access_key}}\nregion = us-west-1\n" dest=/root/.aws/credentials
+
+  - name: install monit
+    apt:
+      name: monit
+
+  - name: put monit config
+    copy:
+      backup: yes
+      src: configs/monitrc
+      dest: /etc/monit/monitrc
+
+  - name: put services monit config
+    copy:
+      backup: yes
+      src: "{{ item }}"
+      dest: /etc/monit/conf.d/
+    with_fileglob:
+      - configs/monit_conf/mysql
+
+  - name: restart monit
+    service:
+      name: monit
+      state: restarted

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+DATE=`date +"%d_%m_%Y"`
+DB_LIST=`mysql -u root -sN -e "show databases;" | grep -v "information_schema\|mysql\|performance_schema\|slow_query_log"`
+BACKUPDIR="/mysql_backup"
+echo -n "Starting backup for databases at "
+echo `date`
+for db in $DB_LIST
+  do
+    echo -n "Starting DB backup creation for $db at "
+    echo `date`
+    mysqldump -uroot $db | gzip > $BACKUPDIR/$db.$DATE.sql.gz
+    echo -n "Finished DB backup creation for $db at "
+    echo `date`
+  done
+find $BACKUPDIR/ -name "*.sql.gz" -mtime +14 -delete
+#AWS S3 backup sync
+BUCKET='{{ s3_bucket }}'
+echo -n "Starting sync for databases at "
+echo `date`
+/usr/local/bin/aws s3 sync --sse AES256 --delete $BACKUPDIR/ s3://$BUCKET/mysql_backup
+RC=$?
+if [[ $RC == 0 ]]; then
+  echo -n "Sync for databases was successful at "
+  echo `date`
+else
+  echo -n "Sync for databases was NOT successful at "
+  echo `date`
+  echo "There was an issue with s3 db backup syncing on {{ main_domain }}" | mail -s "S3 sync Alert" your@email.com -aFROM:root@{{ main_domain }}
+fi

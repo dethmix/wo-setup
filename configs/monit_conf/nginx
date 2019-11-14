@@ -1,0 +1,4 @@
+check process nginx with pidfile /run/nginx.pid
+stop program = "/etc/init.d/nginx stop"
+start program = "/etc/init.d/nginx start"
+if 3 restarts within 6 cycles then timeout

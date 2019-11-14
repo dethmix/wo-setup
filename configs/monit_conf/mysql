@@ -1,0 +1,4 @@
+check process mysqld with pidfile /var/run/mysqld/mysqld.pid
+stop program = "/etc/init.d/mysql stop"
+start program = "/etc/init.d/mysql start"
+if 3 restarts within 6 cycles then timeout

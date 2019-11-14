@@ -1,0 +1,52 @@
+---
+- hosts: webservers
+  become: yes
+  become_user: root
+  become_method: sudo
+  vars:
+    aws_access_key_id: "XXXXXXXX"
+    aws_secret_access_key: "ZZZZZZZ"
+    s3_bucket: "bucket"
+    main_domain: "domain.com"
+  tasks:
+  - name: install pip3
+    apt:
+      name: python3-pip
+      update_cache: yes
+
+  - name: install awscli
+    pip:
+      name: awscli
+
+  - name: create .aws directory
+    file:
+      path: /root/.aws
+      state: directory
+
+  - name: create aws credential file
+    copy: content="[default]\naws_access_key_id = {{aws_access_key_id}}\naws_secret_access_key = {{aws_secret_access_key}}\nregion = us-west-1\n" dest=/root/.aws/credentials
+
+  - name: create /mysql_backup dir
+    file:
+      path: /mysql_backup
+      state: directory
+
+  - name: create backup script
+    template:
+     src: template/ee_mysql_backup_s3.j2
+     dest: /usr/local/bin/s3_db_backup.sh
+     mode: 0755
+
+  - name: create cron for db backups
+    cron:
+      name: "Mysql DB backup and upload to s3"
+      minute: "30"
+      hour: "3"
+      job: "/bin/bash /usr/local/bin/s3_db_backup.sh >> /var/log/s3_db_backup.log 2>&1"
+
+  - name: create logrotation config for s3_sync logs
+    copy:
+      backup: yes
+      src: template/s3_backup_sync
+      dest: /etc/logrotate.d/s3_backup_sync
+

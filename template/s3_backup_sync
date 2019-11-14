@@ -1,0 +1,9 @@
+/var/log/s3_backup_sync.log /var/log/s3_db_backup.log {
+        weekly
+        rotate 5
+        compress
+        delaycompress
+        missingok
+        notifempty
+        create 644 root root
+}

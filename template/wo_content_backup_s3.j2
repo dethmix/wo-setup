@@ -1,0 +1,30 @@
+#!/bin/bash
+NGINX_CONFIG_FOLDER='/etc/nginx/sites-enabled'
+EXCLUDE_DOMAINS="^22222$|^default$"
+DOMAINS=`ls $NGINX_CONFIG_FOLDER/* | sed "s#$NGINX_CONFIG_FOLDER/##" | grep -Ev $EXCLUDE_DOMAINS`
+BUCKET='{{ s3_bucket }}'
+LOCAL_PREFIX='/var/www'
+echo -n "Starting backup to S3 at "
+echo `date`
+alert=0
+for domain in $DOMAINS
+do
+  echo -n "Starting sync for domain $domain at "
+  echo `date`
+  LOCAL_PATH="$LOCAL_PREFIX/$domain"
+  REMOTE_PATH="s3://$BUCKET/$domain"
+  /usr/local/bin/aws s3 sync --delete --exclude "*/wp-content/cache/*" $LOCAL_PATH $REMOTE_PATH --profile $AWS_PROFILE
+  RC=$?
+  if [[ $RC == 0 ]]; then
+    echo -n "Sync for $domain was successful at "
+    echo `date`
+  else
+    echo -n "Sync for $domain was NOT successful at "
+    echo `date`
+    alert=1
+  fi
+done
+if [[ $alert == 1 ]]; then
+  echo "There was an issue with s3 backup syncing on {{ main_domain }}" | mail -s "S3 sync Alert" your@email.com -aFROM:root@{{ main_domain }}
+fi
+

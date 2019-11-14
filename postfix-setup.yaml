@@ -1,0 +1,25 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  vars:
+    hostname: "domain.com"
+
+  tasks:
+  - name: Set Postfix option hostname
+    debconf: 
+      name=postifx 
+      question="postfix/mailname" 
+      value="{{hostname}}"
+      vtype="string"
+
+  - name: Set Postfix option type as internet site
+    debconf: 
+      name=postfix 
+      question="postfix/main_mailer_type" 
+      value="'Internet Site'" 
+      vtype="string"
+
+  - name: install postfix
+    apt: name=postfix state=present
